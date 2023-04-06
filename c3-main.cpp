@@ -100,7 +100,6 @@ void drawCar(Pose pose, int num, Color color, double alpha, pcl::visualization::
 }
 
 int main(){
-
 	auto client = cc::Client("localhost", 2000);
 	client.SetTimeout(2s);
 	auto world = client.GetWorld();
@@ -146,7 +145,6 @@ int main(){
 	typename pcl::PointCloud<PointT>::Ptr scanCloud (new pcl::PointCloud<PointT>);
 
 	lidar->Listen([&new_scan, &lastScanTime, &scanCloud](auto data){
-
 		if(new_scan){
 			auto scan = boost::static_pointer_cast<csd::LidarMeasurement>(data);
 			for (auto detection : *scan){
@@ -185,7 +183,6 @@ int main(){
 		viewer->removeShape("steer");
 		renderRay(viewer, Point(truePose.position.x+2*cos(theta), truePose.position.y+2*sin(theta),truePose.position.z),  Point(truePose.position.x+4*cos(stheta), truePose.position.y+4*sin(stheta),truePose.position.z), "steer", Color(0,1,0));
 
-
 		ControlState accuate(0, 0, 1);
 		if(cs.size() > 0){
 			accuate = cs.back();
@@ -197,19 +194,50 @@ int main(){
 
   		viewer->spinOnce ();
 		
-		if(!new_scan){
-			
+		if(!new_scan){			
 			new_scan = true;
-			// TODO: (Filter scan using voxel filter)
+			// Step1:
+			// TODO: (Filter scan using voxel filter) 
+			pcl::VoxelGrid<PointT> vg;
+			vg.setInputCloud(scanCloud);
+			// 设置体素滤波器的分辨率
+			double filterResolution = 1.0;
+			vg.setLeafSize(filterResolution, filterResolution, filterResolution);
+			// 定义 typename pcl::PointCloud<PointT>::Ptr 类型的指针变量 cloudFiltered，用于保存滤波后的点云数据。
+			typename pcl::PointCloud<PointT>::Ptr cloudFiltered (new pcl::PointCloud<PointT>);
+			vg.filter(*cloudFiltered);
 
+			// Step2:
 			// TODO: Find pose transform by using ICP or NDT matching
-			//pose = ....
+			// 创建了一个名为ndt的正态分布变换对象。
+			pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointXYZ> ndt;
+			
+			// 设置变换的最小误差为0.001。误差小于0.001时，算法将停止迭代，返回最终的匹配结果。
+			ndt.setTransformationEpsilon (.001);
+			ndt.setResolution (5);//分辨率
+			ndt.setInputTarget (mapCloud);
+			
+			// 将ndt对象、过滤后的点云数据、当前的位姿pose和最大迭代次数作为参数传递给它。
+			// 这个函数的作用是使用NDT算法进行点云匹配，并返回一个变换矩阵transform。
+			Eigen::Matrix4d ndtTransform = NDT(ndt, cloudFiltered, pose, 80);
+			
+			// 使用getPose函数将变换矩阵转换为一个位姿对象pose，以便后续使用。
+			pose = getPose(ndtTransform);
 
+			// Step3:
 			// TODO: Transform scan so it aligns with ego's actual pose and render that scan
+			// 创建点云对象，用于存储变换后的点云数据。
+			PointCloudT::Ptr transformed_scan(new PointCloudT);
+			// 使用pcl库中的transformPointCloud函数将过滤后的点云数据*cloudFiltered进行变换，并将结果存储到transformed_scan中。
+			pcl:transformPointCloud(*cloudFiltered, *transformed_scan, ndtTransform);
 
+			// 使用pcl库中的removePointCloud函数将原始的点云数据从可视化窗口中删除，
+			// 然后使用renderPointCloud函数将变换后的点云数据渲染出来，以便我们观察匹配的效果。
 			viewer->removePointCloud("scan");
+			
+			// Step4:			
 			// TODO: Change `scanCloud` below to your transformed scan
-			renderPointCloud(viewer, scanCloud, "scan", Color(1,0,0) );
+			renderPointCloud(viewer, transformed_scan, "scan", Color(1,0,0) );
 
 			viewer->removeAllShapes();
 			drawCar(pose, 1,  Color(0,1,0), 0.35, viewer);
