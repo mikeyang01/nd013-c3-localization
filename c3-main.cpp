@@ -111,7 +111,7 @@ int main(){
 	auto transform = map->GetRecommendedSpawnPoints()[1];
 	auto ego_actor = world.SpawnActor((*vehicles)[12], transform);
 
-	//Create lidar
+	// Create lidar
 	auto lidar_bp = *(blueprint_library->Find("sensor.lidar.ray_cast"));
 	// CANDO: Can modify lidar values to get different scan resolutions
 	lidar_bp.SetAttribute("upper_fov", "15");
@@ -196,7 +196,7 @@ int main(){
 		
 		if(!new_scan){			
 			new_scan = true;
-			// Step1:
+			// ------ Step1 ------
 			// TODO: (Filter scan using voxel filter) 
 			pcl::VoxelGrid<PointT> vg;
 			vg.setInputCloud(scanCloud);
@@ -207,7 +207,7 @@ int main(){
 			typename pcl::PointCloud<PointT>::Ptr cloudFiltered (new pcl::PointCloud<PointT>);
 			vg.filter(*cloudFiltered);
 
-			// Step2:
+			// ------ Step2 ------
 			// TODO: Find pose transform by using ICP or NDT matching
 			// 创建了一个名为ndt的正态分布变换对象。
 			pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointXYZ> ndt;
@@ -217,14 +217,19 @@ int main(){
 			ndt.setResolution (5);//分辨率
 			ndt.setInputTarget (mapCloud);
 			
-			// 将ndt对象、过滤后的点云数据、当前的位姿pose和最大迭代次数作为参数传递给它。
-			// 这个函数的作用是使用NDT算法进行点云匹配，并返回一个变换矩阵transform。
-			Eigen::Matrix4d ndtTransform = NDT(ndt, cloudFiltered, pose, 80);
-			
+			/*
+			参数: 将ndt对象、过滤后的点云数据、当前的位姿pose和最大迭代次数(90)作为参数传递给它。
+			作用: 使用NDT算法进行点云匹配，并返回一个变换矩阵transform。
+			NDT算法是一种基于高斯分布的点云匹配算法，它可以在不同的场景中实现高精度的匹配效果。
+			在匹配过程中，NDT算法会根据两个点云之间的差异来调整变换矩阵，从而实现点云的精确匹配。
+			最大迭代次数的设置可以影响匹配的精度和速度，一般来说，迭代次数越多，匹配的精度就越高，但是计算时间也会相应增加。
+			*/
+			Eigen::Matrix4d ndtTransform = NDT(ndt, cloudFiltered, pose, 90);			
+	
 			// 使用getPose函数将变换矩阵转换为一个位姿对象pose，以便后续使用。
 			pose = getPose(ndtTransform);
 
-			// Step3:
+			// ------ Step3 ------
 			// TODO: Transform scan so it aligns with ego's actual pose and render that scan
 			// 创建点云对象，用于存储变换后的点云数据。
 			PointCloudT::Ptr transformed_scan(new PointCloudT);
@@ -235,9 +240,9 @@ int main(){
 			// 然后使用renderPointCloud函数将变换后的点云数据渲染出来，以便我们观察匹配的效果。
 			viewer->removePointCloud("scan");
 			
-			// Step4:			
+			// ------ Step4 ------
 			// TODO: Change `scanCloud` below to your transformed scan
-			renderPointCloud(viewer, transformed_scan, "scan", Color(1,0,0) );
+			renderPointCloud(viewer, transformed_scan, "scan", Color(1,0,0));
 
 			viewer->removeAllShapes();
 			drawCar(pose, 1,  Color(0,1,0), 0.35, viewer);
