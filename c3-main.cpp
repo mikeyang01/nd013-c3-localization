@@ -35,6 +35,9 @@ using namespace std;
 #include <pcl/registration/ndt.h>
 #include <pcl/console/time.h>   // TicToc
 
+//Eigen库: 一个C++模板库，用于线性代数计算。它提供了一些常用的矩阵和向量操作，如矩阵乘法、矩阵求逆、特征值分解等。
+using namespace Eigen;
+
 PointCloudT pclCloud;
 cc::Vehicle::Control control;
 std::chrono::time_point<std::chrono::system_clock> currentTime;
@@ -95,8 +98,23 @@ void drawCar(Pose pose, int num, Color color, double alpha, pcl::visualization::
 	renderBox(viewer, box, num, color, alpha);
 }
 
-Eigen::Matrix4d NDT(pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointXYZ> ndt, PointCloudT::Ptr source, Pose startingPose, int iterations) {
-    Eigen::Matrix4f init_guess = transform3D(
+/*
+Eigen库的Matrix4d: 用于存储3D空间中的变换矩阵
+这个函数的作用是使用Normal Distributions Transform (NDT)算法来估计两个点云之间的刚体变换，以便将它们对齐。
+
+NDT算法是一种点云配准算法，它可以在不需要先对点云进行配准初始化的情况下，直接对两个点云进行匹配。
+这个算法的基本思想是将点云中的每个点看作一个高斯分布，然后通过计算两个点云之间的高斯分布之间的相似度来估计它们之间的刚体变换。
+这个算法的优点是可以处理大规模的点云数据，并且可以在不需要先验信息的情况下进行配准。
+reference: Solution: NDT Alignment
+*/  	
+Matrix4d NDT(
+  pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointXYZ> ndt, //NDT对象
+  PointCloudT::Ptr source, //一个PointCloudT类型的指针source
+  Pose startingPose, //一个Pose类型的startingPose，Pose类型包含了位置和旋转信息
+  int iterations) {   	
+  
+  	//根据startingPose计算出一个初始的变换矩阵init_guess，然后将其传递给NDT对象，  
+  	Matrix4f init_guess = transform3D(
       startingPose.rotation.yaw, 
       startingPose.rotation.pitch, 
       startingPose.rotation.roll, 
@@ -106,12 +124,17 @@ Eigen::Matrix4d NDT(pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointX
 
     // Setting max number of registration iterations.
     ndt.setMaximumIterations (iterations);
-    ndt.setInputSource (source);
+	
+  	// 使用setInputSource()函数设置source作为输入点云
+  	ndt.setInputSource (source);
 
-    PointCloudT::Ptr cloud_ndt (new PointCloudT);
+  	pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_ndt (new pcl::PointCloud<pcl::PointXYZ>);
+  	
+  	// 使用align()函数进行配准，
     ndt.align (*cloud_ndt, init_guess);
 
-    Eigen::Matrix4d transformation_matrix = ndt.getFinalTransformation ().cast<double>();
+  	// 最后返回估计得到的变换矩阵transformation_matrix。
+    Matrix4d transformation_matrix = ndt.getFinalTransformation ().cast<double>();
 
     return transformation_matrix;
 }
@@ -216,10 +239,11 @@ int main(){
 			new_scan = true;
 			// ------ Step1 ------
 			// TODO: (Filter scan using voxel filter) 
+          	// reference: Solution: ICP Alignment
 			pcl::VoxelGrid<PointT> vg;
 			vg.setInputCloud(scanCloud);
 			// 设置体素滤波器的分辨率
-			double filterResolution = 1.0;
+			double filterResolution = 0.5;// in the tutorial, is 0.5
 			vg.setLeafSize(filterResolution, filterResolution, filterResolution);
 			// 定义 typename pcl::PointCloud<PointT>::Ptr 类型的指针变量 cloudFiltered，用于保存滤波后的点云数据。
 			typename pcl::PointCloud<PointT>::Ptr cloudFiltered (new pcl::PointCloud<PointT>);
@@ -231,8 +255,9 @@ int main(){
 			pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointXYZ> ndt;
 			
 			// 设置变换的最小误差为0.001。误差小于0.001时，算法将停止迭代，返回最终的匹配结果。
-			ndt.setTransformationEpsilon (.001);
-			ndt.setResolution (5);//分辨率
+			ndt.setTransformationEpsilon (.0001);// offical ndt.setTransformationEpsilon (.0001);
+          	ndt.setStepSize (1);//offical 1
+			ndt.setResolution (1);//分辨率, offical ndt.setResolution (1);
 			ndt.setInputTarget (mapCloud);
 			
 			/*
@@ -261,7 +286,8 @@ int main(){
 			// ------ Step4 ------
 			// TODO: Change `scanCloud` below to your transformed scan
 			renderPointCloud(viewer, transformed_scan, "scan", Color(1,0,0));
-
+			// ------ End ------
+          
 			viewer->removeAllShapes();
 			drawCar(pose, 1,  Color(0,1,0), 0.35, viewer);
           
