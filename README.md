@@ -22,4 +22,5 @@ Step 2: Find pose transform by using ICP or NDT matching
 Step 3: Transform the scan so it aligns with ego's actual pose and render that scan
 
 # Result
+![](result.gif)
 
