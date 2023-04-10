@@ -50,10 +50,6 @@ pcl/registration/ndt.h
 pcl/console/time.h
 -
 
-/home/workspace/c3-project/helper.cpp
-helper.h
-/home/workspace/c3-project/helper.h
-
 /home/workspace/c3-project/helper.h
 pcl/io/pcd_io.h
 -

@@ -43,7 +43,6 @@ vector<ControlState> cs;
 bool refresh_view = false;
 void keyboardEventOccurred(const pcl::visualization::KeyboardEvent &event, void* viewer)
 {
-
   	//boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer = *static_cast<boost::shared_ptr<pcl::visualization::PCLVisualizer> *>(viewer_void);
 	if (event.getKeySym() == "Right" && event.keyDown()){
 		cs.push_back(ControlState(0, -0.02, 0));
@@ -63,7 +62,6 @@ void keyboardEventOccurred(const pcl::visualization::KeyboardEvent &event, void*
 }
 
 void Accuate(ControlState response, cc::Vehicle::Control& state){
-
 	if(response.t > 0){
 		if(!state.reverse){
 			state.throttle = min(state.throttle+response.t, 1.0f);
@@ -81,7 +79,6 @@ void Accuate(ControlState response, cc::Vehicle::Control& state){
 		else{
 			state.reverse = true;
 			state.throttle = min(response.t, 1.0f);
-
 		}
 	}
 	state.steer = min( max(state.steer+response.s, -1.0f), 1.0f);
@@ -89,7 +86,6 @@ void Accuate(ControlState response, cc::Vehicle::Control& state){
 }
 
 void drawCar(Pose pose, int num, Color color, double alpha, pcl::visualization::PCLVisualizer::Ptr& viewer){
-
 	BoxQ box;
 	box.bboxTransform = Eigen::Vector3f(pose.position.x, pose.position.y, 0);
     box.bboxQuaternion = getQuaternion(pose.rotation.yaw);
@@ -98,6 +94,28 @@ void drawCar(Pose pose, int num, Color color, double alpha, pcl::visualization::
     box.cube_height = 2;
 	renderBox(viewer, box, num, color, alpha);
 }
+
+Eigen::Matrix4d NDT(pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointXYZ> ndt, PointCloudT::Ptr source, Pose startingPose, int iterations) {
+    Eigen::Matrix4f init_guess = transform3D(
+      startingPose.rotation.yaw, 
+      startingPose.rotation.pitch, 
+      startingPose.rotation.roll, 
+      startingPose.position.x, 
+      startingPose.position.y, 
+      startingPose.position.z).cast<float>();
+
+    // Setting max number of registration iterations.
+    ndt.setMaximumIterations (iterations);
+    ndt.setInputSource (source);
+
+    PointCloudT::Ptr cloud_ndt (new PointCloudT);
+    ndt.align (*cloud_ndt, init_guess);
+
+    Eigen::Matrix4d transformation_matrix = ndt.getFinalTransformation ().cast<double>();
+
+    return transformation_matrix;
+}
+
 
 int main(){
 	auto client = cc::Client("localhost", 2000);
